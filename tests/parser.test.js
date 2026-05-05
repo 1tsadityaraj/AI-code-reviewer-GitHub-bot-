@@ -1,98 +1,57 @@
-/**
- * Unit tests for the diff parser module.
- */
+import { test, describe } from 'node:test';
+import assert from 'node:assert';
+import { parseDiff } from '../src/parser.js';
 
-import { parseDiff } from "../src/parser.js";
-
-describe("parseDiff", () => {
-  it("returns empty array for null/undefined input", () => {
-    expect(parseDiff(null)).toEqual([]);
-    expect(parseDiff(undefined)).toEqual([]);
-    expect(parseDiff("")).toEqual([]);
-  });
-
-  it("parses a simple added file diff", () => {
-    const diff = `diff --git a/hello.js b/hello.js
-new file mode 100644
-index 0000000..e69de29
---- /dev/null
-+++ b/hello.js
-@@ -0,0 +1,3 @@
-+const greet = (name) => {
-+  console.log("Hello, " + name);
-+};
-`;
-
-    const result = parseDiff(diff);
-    expect(result).toHaveLength(1);
-    expect(result[0].filename).toBe("hello.js");
-    expect(result[0].status).toBe("added");
-    expect(result[0].additions).toBe(3);
-    expect(result[0].deletions).toBe(0);
-  });
-
-  it("parses a modified file diff", () => {
-    const diff = `diff --git a/utils.js b/utils.js
-index abc1234..def5678 100644
---- a/utils.js
-+++ b/utils.js
-@@ -1,5 +1,5 @@
- function add(a, b) {
--  return a + b;
-+  return Number(a) + Number(b);
- }
- 
- module.exports = { add };
-`;
-
-    const result = parseDiff(diff);
-    expect(result).toHaveLength(1);
-    expect(result[0].filename).toBe("utils.js");
-    expect(result[0].status).toBe("modified");
-    expect(result[0].additions).toBe(1);
-    expect(result[0].deletions).toBe(1);
-  });
-
-  it("parses multiple files in a single diff", () => {
-    const diff = `diff --git a/foo.js b/foo.js
+describe('parseDiff', () => {
+  test('parses a simple JS diff correctly', () => {
+    const rawDiff = `diff --git a/index.js b/index.js
 index abc..def 100644
---- a/foo.js
-+++ b/foo.js
-@@ -1,2 +1,3 @@
- const x = 1;
-+const y = 2;
- module.exports = { x };
-diff --git a/bar.js b/bar.js
-new file mode 100644
---- /dev/null
-+++ b/bar.js
-@@ -0,0 +1,2 @@
-+const z = 3;
-+module.exports = { z };
-`;
+--- a/index.js
++++ b/index.js
+@@ -1,3 +1,4 @@
+ const a = 1;
+-const b = 2;
++const b = 3;
++const c = 4;
+ console.log(a, b);`;
 
-    const result = parseDiff(diff);
-    expect(result).toHaveLength(2);
-    expect(result[0].filename).toBe("foo.js");
-    expect(result[1].filename).toBe("bar.js");
-    expect(result[1].status).toBe("added");
+    const result = parseDiff(rawDiff);
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0].filename, 'index.js');
+    assert.strictEqual(result[0].language, 'javascript');
+    assert.strictEqual(result[0].hunks.length, 1);
+    
+    const hunk = result[0].hunks[0];
+    assert.strictEqual(hunk.header, '@@ -1,3 +1,4 @@');
+    assert.strictEqual(hunk.lines.length, 5);
+    
+    assert.deepStrictEqual(hunk.lines[0], { type: 'context', content: 'const a = 1;', lineNumber: 1 });
+    assert.deepStrictEqual(hunk.lines[1], { type: 'remove', content: 'const b = 2;', lineNumber: 2 });
+    assert.deepStrictEqual(hunk.lines[2], { type: 'add', content: 'const b = 3;', lineNumber: 2 });
+    assert.deepStrictEqual(hunk.lines[3], { type: 'add', content: 'const c = 4;', lineNumber: 3 });
+    assert.deepStrictEqual(hunk.lines[4], { type: 'context', content: 'console.log(a, b);', lineNumber: 4 });
   });
 
-  it("detects deleted files", () => {
-    const diff = `diff --git a/old.js b/old.js
-deleted file mode 100644
-index abc..000 100644
---- a/old.js
-+++ /dev/null
-@@ -1,3 +0,0 @@
--const old = true;
--module.exports = { old };
--
-`;
+  test('skips lock files and images', () => {
+    const rawDiff = `diff --git a/package-lock.json b/package-lock.json
+index abc..def 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,2 +1,2 @@
+ {
+-  "version": "1.0.0"
++  "version": "1.0.1"
+ }
+diff --git a/image.png b/image.png
+Binary files a/image.png and b/image.png differ`;
 
-    const result = parseDiff(diff);
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe("removed");
-    expect(result[0].deletions).toBe(3);
+    const result = parseDiff(rawDiff);
+    assert.strictEqual(result.length, 0);
+  });
+
+  test('handles empty or invalid diff gracefully', () => {
+    assert.deepStrictEqual(parseDiff(''), []);
+    assert.deepStrictEqual(parseDiff(null), []);
+    assert.deepStrictEqual(parseDiff(undefined), []);
   });
 });

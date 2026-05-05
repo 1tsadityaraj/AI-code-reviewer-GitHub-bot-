@@ -7,7 +7,7 @@
   "scripts": {
     "start": "probot run ./index.js",
     "dev": "node --watch index.js",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
+    "test": "node --test"
   },
   "repository": {
     "type": "git",
