@@ -8,7 +8,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { parseDiff } from "./parser.js";
-import { REVIEW_PROMPT } from "./prompt.js";
+import { SYSTEM_PROMPT, buildUserMessage } from "./prompt.js";
 
 // ── Configuration ─────────────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -21,11 +21,13 @@ const IssueSchema = z.object({
   file: z.string(),
   line: z.number().int().positive(),
   severity: z.enum(["critical", "warning", "suggestion"]),
-  category: z.enum(["bugs", "security", "performance", "style", "best_practices"]),
+  category: z.enum(["bug", "security", "performance", "style", "best_practices"]),
   comment: z.string().max(500),
 });
 
 const ReviewResponseSchema = z.object({
+  verdict: z.enum(["approved", "needs_work"]),
+  summary: z.string(),
   issues: z.array(IssueSchema),
 });
 
@@ -79,24 +81,21 @@ export async function reviewPullRequest(context, pr) {
   }
 
   // 4. Build per-file diffs for AI
-  const fileDiffs = reviewableFiles.map((file) => {
+  const fileDiffsStr = reviewableFiles.map((file) => {
     let diffContent = file.patch || "";
     if (diffContent.length > MAX_DIFF_SIZE) {
       diffContent =
         diffContent.substring(0, MAX_DIFF_SIZE) +
         "\n... [diff truncated]";
     }
-    return {
-      filename: file.filename,
-      status: file.status,
-      additions: file.additions,
-      deletions: file.deletions,
-      diff: diffContent,
-    };
-  });
+    return `### File: ${file.filename} (${file.status})\n+${file.additions} / -${file.deletions}\n\`\`\`diff\n${diffContent}\n\`\`\``;
+  }).join("\n\n");
 
   // 5. Call Gemini
-  const issues = await callGemini(fileDiffs, pr);
+  const repoName = `${repo.owner}/${repo.repo}`;
+  const author = pr.user.login;
+  const reviewData = await callGemini(pr.title, repoName, author, fileDiffsStr);
+  const issues = reviewData.issues;
 
   // 6. Map to GitHub review comments
   const comments = mapToGitHubComments(issues, reviewableFiles);
@@ -113,6 +112,8 @@ export async function reviewPullRequest(context, pr) {
   }
 
   return {
+    verdict: reviewData.verdict,
+    summary: reviewData.summary,
     comments,
     hasCritical: criticalCount > 0,
     criticalCount,
@@ -125,7 +126,7 @@ export async function reviewPullRequest(context, pr) {
 /**
  * Sends file diffs to Google Gemini and validates the response with Zod.
  */
-async function callGemini(fileDiffs, pr) {
+async function callGemini(prTitle, repoName, author, fileDiffs) {
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
@@ -137,10 +138,10 @@ async function callGemini(fileDiffs, pr) {
     },
   });
 
-  const userPrompt = buildUserPrompt(fileDiffs, pr);
+  const userPrompt = buildUserMessage(prTitle, repoName, author, fileDiffs);
 
   const result = await model.generateContent([
-    { text: REVIEW_PROMPT },
+    { text: SYSTEM_PROMPT },
     { text: userPrompt },
   ]);
 
@@ -149,69 +150,27 @@ async function callGemini(fileDiffs, pr) {
   try {
     const parsed = JSON.parse(raw);
 
-    // Normalize: accept both `{ issues: [...] }` and bare array
-    const normalized = Array.isArray(parsed) ? { issues: parsed } : parsed;
-
     // Validate with Zod
-    const validated = ReviewResponseSchema.safeParse(normalized);
+    const validated = ReviewResponseSchema.safeParse(parsed);
 
     if (!validated.success) {
       console.error("Zod validation failed:", validated.error.format());
-      // Attempt partial recovery — keep only valid issues
-      return (normalized.issues || []).filter(
-        (i) => IssueSchema.safeParse(i).success
-      );
+      
+      // Attempt partial recovery — keep valid properties where possible
+      return {
+        verdict: ["approved", "needs_work"].includes(parsed.verdict) ? parsed.verdict : "approved",
+        summary: typeof parsed.summary === "string" ? parsed.summary : "Review processed with validation errors.",
+        issues: (parsed.issues || []).filter(
+          (i) => IssueSchema.safeParse(i).success
+        )
+      };
     }
 
-    return validated.data.issues;
+    return validated.data;
   } catch (err) {
     console.error("Failed to parse Gemini response:", err.message);
-    return [];
+    return { verdict: "approved", summary: "Failed to parse AI response.", issues: [] };
   }
-}
-
-/**
- * Builds the user prompt with PR context and diffs.
- */
-function buildUserPrompt(fileDiffs, pr) {
-  const fileSection = fileDiffs
-    .map(
-      (f) =>
-        `### File: ${f.filename} (${f.status})\n` +
-        `+${f.additions} / -${f.deletions}\n` +
-        "```diff\n" +
-        f.diff +
-        "\n```"
-    )
-    .join("\n\n");
-
-  return (
-    `## Pull Request\n` +
-    `**Title:** ${pr.title}\n` +
-    `**Description:** ${pr.body || "No description."}\n` +
-    `**Branch:** ${pr.head.ref} → ${pr.base.ref}\n\n` +
-    `## Changed Files\n\n${fileSection}\n\n` +
-    `## Response Schema\n` +
-    `Respond with a JSON object:\n` +
-    "```json\n" +
-    JSON.stringify(
-      {
-        issues: [
-          {
-            file: "path/to/file.js",
-            line: 42,
-            severity: "critical | warning | suggestion",
-            category: "bugs | security | performance | style | best_practices",
-            comment: "Concise issue description.",
-          },
-        ],
-      },
-      null,
-      2
-    ) +
-    "\n```\n" +
-    `If no issues are found, return: { "issues": [] }`
-  );
 }
 
 /**
@@ -297,6 +256,8 @@ function extractDiffLineNumbers(patch) {
 
 function emptyResult() {
   return {
+    verdict: "approved",
+    summary: "No files matched the review criteria.",
     comments: [],
     hasCritical: false,
     criticalCount: 0,

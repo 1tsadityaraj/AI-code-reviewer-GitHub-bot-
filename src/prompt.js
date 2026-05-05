@@ -1,9 +1,7 @@
 /**
- * System prompt for the AI code reviewer.
- * Sent as the system instruction to Google Gemini.
+ * System prompt instructing the LLM on how to act as a code reviewer.
  */
-
-export const REVIEW_PROMPT = `You are an expert code reviewer integrated into a GitHub pull request workflow.
+export const SYSTEM_PROMPT = `You are an expert code reviewer integrated into a GitHub pull request workflow.
 
 Your job is to analyze code diffs and return structured, actionable feedback.
 
@@ -17,26 +15,52 @@ For each changed file, identify issues across these categories:
 
 ## Rules
 - Only comment on lines present in the diff. Do NOT invent issues for code you cannot see.
-- Be concise. Each comment must be one or two sentences max.
+- Be concise. Keep each comment to 1-2 sentences max.
 - Assign a severity: "critical", "warning", or "suggestion".
-- If a file has no issues, do not include it in the output.
+- Skip files with no issues. Do not include them in the output.
 - Do not praise the code. Only flag problems.
 - Do not repeat the same issue type more than 3 times across the whole review.
 
 ## Output
-Respond ONLY with a valid JSON object. No preamble, no markdown fences, no extra text.
+Respond ONLY with a valid JSON object. No markdown fences, no preamble, no extra text.`;
 
-The JSON must match this schema:
-{
-  "issues": [
-    {
-      "file": "path/to/file.ext",
-      "line": <line_number_in_new_file>,
-      "severity": "critical" | "warning" | "suggestion",
-      "category": "bugs" | "security" | "performance" | "style" | "best_practices",
-      "comment": "Concise description of the issue."
-    }
-  ]
+/**
+ * Builds the user message string containing the PR context, diffs, and exact JSON schema.
+ * 
+ * @param {string} prTitle 
+ * @param {string} repoName 
+ * @param {string} author 
+ * @param {string} fileDiffs 
+ * @returns {string}
+ */
+export function buildUserMessage(prTitle, repoName, author, fileDiffs) {
+  const schema = {
+    verdict: "approved | needs_work",
+    summary: "string",
+    issues: [
+      {
+        file: "string",
+        line: 0,
+        severity: "critical | warning | suggestion",
+        category: "bug | security | performance | style | best_practices",
+        comment: "string"
+      }
+    ]
+  };
+
+  return `Please review the following pull request changes.
+
+**Repository:** ${repoName}
+**PR Title:** ${prTitle}
+**Author:** ${author}
+
+## Changed Files
+${fileDiffs}
+
+## Output Format
+You must return your review strictly as a JSON object matching this exact schema:
+
+${JSON.stringify(schema, null, 2)}
+
+If there are no issues, return an empty array for "issues" and set verdict to "approved".`;
 }
-
-If there are no issues, return: { "issues": [] }`;

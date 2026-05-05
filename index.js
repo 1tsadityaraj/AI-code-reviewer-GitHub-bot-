@@ -135,9 +135,14 @@ export default (app) => {
 /**
  * Builds a markdown summary table for the review.
  */
-function buildSummary({ criticalCount, warningCount, suggestionCount, filesReviewed }) {
+function buildSummary({ verdict, summary, criticalCount, warningCount, suggestionCount, filesReviewed }) {
+  const statusIcon = verdict === "approved" ? "✅" : "⚠️";
+  
   return [
-    "## 🤖 AI Code Review Summary",
+    `## 🤖 AI Code Review Summary`,
+    "",
+    `**Verdict:** ${statusIcon} ${verdict === "approved" ? "Approved" : "Needs Work"}`,
+    `**Summary:** ${summary}`,
     "",
     "| Severity | Count |",
     "|----------|-------|",
