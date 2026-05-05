@@ -6,13 +6,17 @@
  */
 
 import "dotenv/config";
-import { reviewPullRequest } from "./src/reviewer.js";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { reviewPR, postReview } from "./src/reviewer.js";
 
 /**
  * @param {import('probot').Probot} app
  */
 export default (app) => {
   app.log.info("🤖 AI Code Reviewer Bot loaded");
+
+  // Initialize the Gemini client once
+  const geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
   // ── Review on PR opened or updated ──────────────────────────
   app.on(
@@ -34,34 +38,20 @@ export default (app) => {
           context: "AI Code Reviewer",
         });
 
-        const result = await reviewPullRequest(context, pr);
+        // Review PR using the new pipeline
+        const result = await reviewPR(context, geminiClient);
+        
+        // Post the final summary and inline comments
+        await postReview(context, result);
 
-        if (result.comments.length > 0) {
-          await context.octokit.pulls.createReview({
-            ...repo,
-            pull_number: pr.number,
-            commit_id: pr.head.sha,
-            body: buildSummary(result),
-            event: "COMMENT",
-            comments: result.comments,
-          });
-        } else {
-          await context.octokit.issues.createComment({
-            ...repo,
-            issue_number: pr.number,
-            body: "## 🤖 AI Code Review\n\n✅ **No issues found.** The changes look good.\n\n---\n*Reviewed by AI Code Reviewer Bot*",
-          });
-        }
-
+        // Update the commit status based on the verdict
         await context.octokit.repos.createCommitStatus({
           ...repo,
           sha: pr.head.sha,
-          state: result.hasCritical ? "failure" : "success",
-          description: result.hasCritical
-            ? `${result.comments.length} issue(s) — ${result.criticalCount} critical`
-            : result.comments.length > 0
-              ? `${result.comments.length} issue(s) — no critical`
-              : "No issues found",
+          state: result.verdict === "needs_work" ? "failure" : "success",
+          description: result.verdict === "needs_work"
+            ? `Needs work — ${result.issues.length} issue(s) found`
+            : "Approved — Code looks good",
           context: "AI Code Reviewer",
         });
       } catch (error) {
@@ -102,24 +92,11 @@ export default (app) => {
         content: "eyes",
       });
 
-      const result = await reviewPullRequest(context, pr);
-
-      if (result.comments.length > 0) {
-        await context.octokit.pulls.createReview({
-          ...repo,
-          pull_number: pr.number,
-          commit_id: pr.head.sha,
-          body: buildSummary(result),
-          event: "COMMENT",
-          comments: result.comments,
-        });
-      } else {
-        await context.octokit.issues.createComment({
-          ...repo,
-          issue_number: pr.number,
-          body: "## 🤖 AI Code Review (Re-review)\n\n✅ **No issues found.**\n\n---\n*Reviewed by AI Code Reviewer Bot*",
-        });
-      }
+      // Re-review PR using the new pipeline
+      const result = await reviewPR(context, geminiClient);
+      
+      // Post the final summary and inline comments
+      await postReview(context, result);
 
       await context.octokit.reactions.createForIssueComment({
         ...repo,
@@ -131,28 +108,3 @@ export default (app) => {
     }
   });
 };
-
-/**
- * Builds a markdown summary table for the review.
- */
-function buildSummary({ verdict, summary, criticalCount, warningCount, suggestionCount, filesReviewed }) {
-  const statusIcon = verdict === "approved" ? "✅" : "⚠️";
-  
-  return [
-    `## 🤖 AI Code Review Summary`,
-    "",
-    `**Verdict:** ${statusIcon} ${verdict === "approved" ? "Approved" : "Needs Work"}`,
-    `**Summary:** ${summary}`,
-    "",
-    "| Severity | Count |",
-    "|----------|-------|",
-    `| 🔴 Critical | ${criticalCount} |`,
-    `| 🟡 Warning | ${warningCount} |`,
-    `| 🔵 Suggestion | ${suggestionCount} |`,
-    "",
-    `**Files reviewed:** ${filesReviewed}`,
-    "",
-    "---",
-    "*Reviewed by AI Code Reviewer Bot — powered by Google Gemini*",
-  ].join("\n");
-}
