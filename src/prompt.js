@@ -1,11 +1,9 @@
 /**
- * System Prompt for the AI Code Reviewer
- *
- * This prompt is sent as the system instruction to Google Gemini.
- * It defines the reviewer's persona, review criteria, rules, and output format.
+ * System prompt for the AI code reviewer.
+ * Sent as the system instruction to Google Gemini.
  */
 
-const REVIEW_PROMPT = `You are an expert code reviewer integrated into a GitHub pull request workflow.
+export const REVIEW_PROMPT = `You are an expert code reviewer integrated into a GitHub pull request workflow.
 
 Your job is to analyze code diffs and return structured, actionable feedback.
 
@@ -42,5 +40,3 @@ The JSON must match this schema:
 }
 
 If there are no issues, return: { "issues": [] }`;
-
-module.exports = { REVIEW_PROMPT };

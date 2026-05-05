@@ -2,16 +2,16 @@
  * Unit tests for the diff parser module.
  */
 
-const { parseDiff } = require("../src/parser");
+import { parseDiff } from "../src/parser.js";
 
 describe("parseDiff", () => {
-  it("should return empty array for null/undefined input", () => {
+  it("returns empty array for null/undefined input", () => {
     expect(parseDiff(null)).toEqual([]);
     expect(parseDiff(undefined)).toEqual([]);
     expect(parseDiff("")).toEqual([]);
   });
 
-  it("should parse a simple added file diff", () => {
+  it("parses a simple added file diff", () => {
     const diff = `diff --git a/hello.js b/hello.js
 new file mode 100644
 index 0000000..e69de29
@@ -31,7 +31,7 @@ index 0000000..e69de29
     expect(result[0].deletions).toBe(0);
   });
 
-  it("should parse a modified file diff", () => {
+  it("parses a modified file diff", () => {
     const diff = `diff --git a/utils.js b/utils.js
 index abc1234..def5678 100644
 --- a/utils.js
@@ -53,7 +53,7 @@ index abc1234..def5678 100644
     expect(result[0].deletions).toBe(1);
   });
 
-  it("should parse multiple files in a single diff", () => {
+  it("parses multiple files in a single diff", () => {
     const diff = `diff --git a/foo.js b/foo.js
 index abc..def 100644
 --- a/foo.js
@@ -78,7 +78,7 @@ new file mode 100644
     expect(result[1].status).toBe("added");
   });
 
-  it("should detect deleted files", () => {
+  it("detects deleted files", () => {
     const diff = `diff --git a/old.js b/old.js
 deleted file mode 100644
 index abc..000 100644

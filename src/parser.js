@@ -12,13 +12,13 @@
  * @returns {Array<ParsedFile>}
  *
  * @typedef {object} ParsedFile
- * @property {string} filename   Path of the file
+ * @property {string} filename
  * @property {string} status     "added" | "modified" | "removed" | "renamed"
- * @property {number} additions  Number of added lines
- * @property {number} deletions  Number of removed lines
+ * @property {number} additions
+ * @property {number} deletions
  * @property {string} patch      The raw patch/hunk content
  */
-function parseDiff(rawDiff) {
+export function parseDiff(rawDiff) {
   if (!rawDiff || typeof rawDiff !== "string") {
     return [];
   }
@@ -28,9 +28,7 @@ function parseDiff(rawDiff) {
 
   for (const section of fileSections) {
     const file = parseFileSection(section);
-    if (file) {
-      files.push(file);
-    }
+    if (file) files.push(file);
   }
 
   return files;
@@ -42,15 +40,12 @@ function parseDiff(rawDiff) {
 function parseFileSection(section) {
   const lines = section.split("\n");
 
-  // Extract filename from the diff header
-  // Format: a/path/to/file b/path/to/file
   const headerMatch = lines[0]?.match(/^a\/(.+?)\s+b\/(.+)/);
   if (!headerMatch) return null;
 
   const oldPath = headerMatch[1];
   const newPath = headerMatch[2];
 
-  // Determine file status
   let status = "modified";
   if (section.includes("new file mode")) {
     status = "added";
@@ -60,33 +55,17 @@ function parseFileSection(section) {
     status = "renamed";
   }
 
-  // Find where the patch hunks start
   const patchStartIndex = lines.findIndex((line) => line.startsWith("@@"));
   const patch =
     patchStartIndex >= 0 ? lines.slice(patchStartIndex).join("\n") : "";
 
-  // Count additions and deletions
   let additions = 0;
   let deletions = 0;
 
-  if (patch) {
-    const patchLines = patch.split("\n");
-    for (const line of patchLines) {
-      if (line.startsWith("+") && !line.startsWith("+++")) {
-        additions++;
-      } else if (line.startsWith("-") && !line.startsWith("---")) {
-        deletions++;
-      }
-    }
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) additions++;
+    else if (line.startsWith("-") && !line.startsWith("---")) deletions++;
   }
 
-  return {
-    filename: newPath,
-    status,
-    additions,
-    deletions,
-    patch,
-  };
+  return { filename: newPath, status, additions, deletions, patch };
 }
-
-module.exports = { parseDiff };
