@@ -1,0 +1,39 @@
+{
+  "name": "ai-code-reviewer-github-bot",
+  "version": "1.0.0",
+  "description": "AI-powered GitHub bot that automatically reviews pull request code using Google Gemini, providing structured, actionable feedback on bugs, security, performance, style, and best practices.",
+  "main": "index.js",
+  "scripts": {
+    "start": "probot run ./index.js",
+    "dev": "nodemon --exec 'probot run ./index.js'",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
+    "lint": "eslint . --ext .js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1tsadityaraj/AI-code-reviewer-GitHub-bot-.git"
+  },
+  "keywords": [
+    "github-bot",
+    "code-review",
+    "ai",
+    "gemini",
+    "probot",
+    "pull-request",
+    "automation"
+  ],
+  "author": "1tsadityaraj",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/1tsadityaraj/AI-code-reviewer-GitHub-bot-/issues"
+  },
+  "homepage": "https://github.com/1tsadityaraj/AI-code-reviewer-GitHub-bot-#readme",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "dotenv": "^16.4.7",
+    "probot": "^13.4.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
