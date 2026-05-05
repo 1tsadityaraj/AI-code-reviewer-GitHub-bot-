@@ -1,6 +1,25 @@
 # 🤖 AI Code Reviewer — GitHub Bot
 
+![GitHub App](https://img.shields.io/badge/GitHub-App-181717?logo=github&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-≥18-339933?logo=node.js&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue)
+
 An AI-powered GitHub bot that **automatically reviews pull requests** using **Google Gemini**. It analyzes code diffs and posts structured, actionable inline comments on bugs, security risks, performance issues, style problems, and best practice violations.
+
+### 💡 Why I Built This
+
+Code reviews are the biggest bottleneck in most teams — senior engineers spend hours every week reviewing PRs, and even then, subtle bugs, security flaws, and style inconsistencies slip through. I built this bot to solve that problem: a zero-config AI reviewer that catches the mechanical issues instantly, so human reviewers can focus on architecture, design, and mentoring. The hardest engineering challenge was parsing unified diffs and mapping AI-generated line references back to GitHub's review position API — which turned out to be a deep rabbit hole into how Git represents changes.
+
+---
+
+## 🎬 Demo
+
+> The bot automatically reviews every PR and posts inline comments with severity-tagged feedback:
+
+<p align="center">
+  <img src="assets/demo-review.png" alt="AI Code Reviewer Demo — inline review comments on a pull request" width="700" />
+</p>
 
 ---
 
