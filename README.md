@@ -1,195 +1,87 @@
-# 🤖 AI Code Reviewer — GitHub Bot
+<div align="center">
+  <img src="./assets/demo-review.png" alt="AI Code Reviewer Bot Logo" width="120" />
+  <h1>AI Code Reviewer GitHub Bot</h1>
+  <p>An intelligent, zero-config GitHub App that automatically reviews pull requests using Google Gemini.</p>
 
-![GitHub App](https://img.shields.io/badge/GitHub-App-181717?logo=github&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-≥18-339933?logo=node.js&logoColor=white)
-![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-blue)
-
-An AI-powered GitHub bot that **automatically reviews pull requests** using **Google Gemini**. It analyzes code diffs and posts structured, actionable inline comments on bugs, security risks, performance issues, style problems, and best practice violations.
-
-### 💡 Why I Built This
-
-Code reviews are the biggest bottleneck in most teams — senior engineers spend hours every week reviewing PRs, and even then, subtle bugs, security flaws, and style inconsistencies slip through. I built this bot to solve that problem: a zero-config AI reviewer that catches the mechanical issues instantly, so human reviewers can focus on architecture, design, and mentoring. The hardest engineering challenge was parsing unified diffs and mapping AI-generated line references back to GitHub's review position API — which turned out to be a deep rabbit hole into how Git represents changes.
+  ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+  ![Probot](https://img.shields.io/badge/Probot-000000?style=for-the-badge&logo=probot&logoColor=white)
+  ![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)
+  ![Railway](https://img.shields.io/badge/Railway-131415?style=for-the-badge&logo=railway&logoColor=white)
+</div>
 
 ---
 
-## 🎬 Demo
-
-> The bot automatically reviews every PR and posts inline comments with severity-tagged feedback:
-
-<p align="center">
-  <img src="assets/demo-review.png" alt="AI Code Reviewer Demo — inline review comments on a pull request" width="700" />
-</p>
-
----
+![Demo GIF placeholder](https://via.placeholder.com/800x400.png?text=Demo+GIF+Placeholder+—+Shows+bot+posting+an+inline+comment)
 
 ## ✨ Features
 
-| Feature | Description |
-|---------|-------------|
-| 🔍 **Automatic PR Reviews** | Triggers on every PR opened or updated |
-| 🧠 **Gemini-Powered Analysis** | Uses Google Gemini for intelligent, context-aware code review |
-| 💬 **Inline Comments** | Posts review comments directly on the relevant lines |
-| 🏷️ **Severity Levels** | Categorizes issues as 🔴 Critical, 🟡 Warning, or 🔵 Suggestion |
-| 📊 **Review Summaries** | Posts a summary table with issue counts per severity |
-| ✅ **Commit Status Checks** | Sets pass/fail status based on critical issues found |
-| 🔄 **Re-review Command** | Comment `/review` on any PR to trigger a fresh review |
-| 🚫 **Smart Filtering** | Skips lock files, images, build artifacts, and minified code |
+- **Inline PR Comments:** Analyzes diffs and posts precise, inline feedback directly on the changed lines of code.
+- **Categorized Feedback:** Automatically detects and categorizes issues by Bugs, Security, Performance, Style, and Best Practices.
+- **Severity Levels:** Tags every issue as 🔴 **Critical**, 🟡 **Warning**, or 🔵 **Suggestion**.
+- **Commit Status Integration:** Automatically blocks PR merging (marks commit status as "failure") if any **Critical** issues are found.
+- **On-Demand Re-reviews:** Type `/review` in a PR comment to manually trigger a fresh analysis.
+- **Diff & File Limits:** Smartly skips massive PRs (>50 files) and truncates gigantic files to protect token limits and API costs.
+
+## 🏗️ How It Works (Architecture)
+
+1. **Webhook Trigger:** GitHub sends a webhook payload to the Probot server whenever a Pull Request is opened or synchronized.
+2. **Fetch & Parse Diff:** The bot fetches the raw unified diff of the PR and parses it into structured file objects, filtering out lock files and binaries.
+3. **Prompt Construction:** For each valid file, the bot chunks the diff and constructs a prompt embedding the PR context and a strict JSON schema.
+4. **LLM Inference:** Google's `gemini-1.5-pro` model evaluates the diff against strict software engineering heuristics with a temperature of `0` for deterministic outputs.
+5. **Mapping & Posting:** The bot safely parses the JSON response, maps the AI's flagged issues back to valid GitHub line numbers, and posts them via the GitHub API.
+
+## 🚀 Setup & Local Development
+
+1. **Clone & Install**
+   ```bash
+   git clone https://github.com/1tsadityaraj/AI-code-reviewer-GitHub-bot-.git
+   cd AI-code-reviewer-GitHub-bot-
+   npm install
+   ```
+
+2. **Create a GitHub App**
+   - Go to your GitHub **Developer settings** -> **GitHub Apps** -> **New GitHub App**.
+   - Enable Webhooks. For local dev, use a proxy like [smee.io](https://smee.io/).
+   - **Permissions:**
+     - Pull requests: Read & Write
+     - Issues: Read & Write
+     - Contents: Read-only
+     - Commit statuses: Read & Write
+   - **Events:** Subscribe to `pull_request` and `issue_comment`.
+
+3. **Environment Configuration**
+   Rename `.env.example` to `.env` and fill in the credentials:
+   ```env
+   APP_ID=your_github_app_id
+   PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+   WEBHOOK_SECRET=your_webhook_secret
+   GEMINI_API_KEY=your_gemini_api_key
+   ```
+   *(Note: The `PRIVATE_KEY` must have actual literal `\n` newline characters, not physical line breaks.)*
+
+4. **Run the Bot**
+   ```bash
+   npm run dev
+   ```
+
+## ☁️ Deployment (Railway)
+
+Deploying this bot to [Railway.app](https://railway.app/) is fast and requires zero extra config files since it automatically detects the Node.js environment.
+
+1. Create a new project on Railway and select **Deploy from GitHub repo**.
+2. Select this repository. Railway will automatically build it using Nixpacks and run `npm start`.
+3. Go to the **Variables** tab in your Railway service and add all 4 variables from your `.env` file.
+   - *Tip:* For `PRIVATE_KEY`, you can paste the multi-line `.pem` file content directly. Railway handles multi-line environment variables natively, so you don't need to replace line breaks with `\n`.
+4. Go to the **Settings** tab in Railway, scroll to **Public Networking**, and click **Generate Domain**.
+5. Copy that newly generated URL. Go back to your GitHub App settings on GitHub, and update the **Webhook URL** to your Railway domain.
+
+## 🧠 What I Learned
+
+Building this project taught me several deep architectural lessons:
+- **Navigating the GitHub API ecosystem:** Learning the difference between Actions, OAuth Apps, and GitHub Apps, and mastering Probot's webhook abstraction.
+- **Parsing Unified Diffs from Scratch:** Git diffs have a notorious, esoteric format. Writing a custom parser to track line numbers precisely was the hardest technical challenge, but crucial to preventing 422 API errors when posting inline comments.
+- **LLM Output Determinism:** Getting an LLM to reliably return valid, parsable JSON without hallucinating or adding markdown fences requires strict prompt engineering, `responseMimeType` enforcement, and Zod fallback schema validation.
+- **Defensive API Design:** Implementing protective guardrails (e.g., rejecting PRs > 50 files, chunking 300-line diffs) to prevent the bot from exceeding token quotas or DDOSing the LLM endpoints during large code refactors.
 
 ---
-
-## 📦 Architecture
-
-```
-AI-code-reviewer-GitHub-bot/
-├── index.js              # Probot app — event handlers & GitHub API
-├── src/
-│   ├── reviewer.js       # Review engine — orchestrates the pipeline
-│   ├── parser.js         # Unified diff parser
-│   └── prompt.js         # Gemini system prompt & review criteria
-├── tests/
-│   └── parser.test.js    # Unit tests for the diff parser
-├── .env.example          # Environment variable template
-├── .gitignore
-├── package.json
-└── README.md
-```
-
-### Review Pipeline
-
-```
-PR Event → Fetch Diff → Parse Files → Filter → Send to Gemini → Map to Inline Comments → Post Review
-```
-
-1. **Event**: Probot receives a `pull_request.opened` or `pull_request.synchronize` webhook
-2. **Fetch**: Retrieves the raw unified diff from GitHub's API
-3. **Parse**: Splits the diff into per-file objects with metadata
-4. **Filter**: Removes lock files, images, build artifacts, and oversized diffs
-5. **AI Review**: Sends file diffs + PR context to Google Gemini with structured review criteria
-6. **Map**: Validates AI output and maps issues to exact diff line numbers
-7. **Post**: Submits inline review comments + summary table on the PR
-
----
-
-## 🚀 Setup
-
-### Prerequisites
-
-- **Node.js** ≥ 18
-- A **GitHub App** ([create one here](https://github.com/settings/apps/new))
-- A **Google Gemini API key** ([get one here](https://aistudio.google.com/apikey))
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/1tsadityaraj/AI-code-reviewer-GitHub-bot-.git
-cd AI-code-reviewer-GitHub-bot-
-npm install
-```
-
-### 2. Create a GitHub App
-
-Go to [GitHub Settings → Developer settings → GitHub Apps](https://github.com/settings/apps/new) and configure:
-
-| Setting | Value |
-|---------|-------|
-| **Webhook URL** | Your server URL (e.g. `https://your-domain.com/api/webhook`) |
-| **Webhook Secret** | A random secret string |
-| **Permissions** | `Pull Requests: Read & Write`, `Issues: Read & Write`, `Commit Statuses: Read & Write`, `Contents: Read` |
-| **Subscribe to events** | `Pull request`, `Issue comment` |
-
-After creating the app:
-- Note the **App ID**
-- Generate and download a **Private Key** (`.pem` file)
-- Install the app on your repository
-
-### 3. Configure Environment
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your values:
-
-```env
-APP_ID=123456
-PRIVATE_KEY_PATH=./private-key.pem
-WEBHOOK_SECRET=your_secret_here
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-### 4. Run the Bot
-
-```bash
-# Development
-npm run dev
-
-# Production
-npm start
-```
-
----
-
-## 🎯 Review Criteria
-
-The bot evaluates code across 5 categories:
-
-| Category | What It Catches |
-|----------|----------------|
-| **🐛 Bugs** | Logic errors, null/undefined issues, off-by-one errors, missing error handling |
-| **🔒 Security** | Injection risks, exposed secrets, insecure defaults, auth bypass |
-| **⚡ Performance** | Unnecessary loops, blocking async calls, memory leaks |
-| **🎨 Style** | Naming inconsistencies, dead code, overly complex logic |
-| **📋 Best Practices** | Missing tests, improper error propagation, missing types |
-
-### Review Rules
-
-- Only comments on lines **present in the diff**
-- Each comment is **1-2 sentences max**
-- Issues are assigned a **severity**: critical, warning, or suggestion
-- Same issue type is **not repeated more than 3 times** across the review
-- **No praise** — only flags problems
-
----
-
-## 🔄 Commands
-
-| Command | Description |
-|---------|-------------|
-| `/review` | Post this as a comment on any PR to trigger a fresh AI review |
-
----
-
-## 🧪 Testing
-
-```bash
-npm test
-```
-
----
-
-## 🌐 Deployment
-
-### Deploy to Railway / Render / Fly.io
-
-1. Set the environment variables from `.env.example` in your hosting platform
-2. Upload your GitHub App private key as a secret
-3. Set the start command to `npm start`
-4. Update your GitHub App's webhook URL to point to your deployed server
-
-### Deploy with Docker
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --production
-COPY . .
-CMD ["npm", "start"]
-```
-
----
-
-## 📄 License
-
-MIT © [1tsadityaraj](https://github.com/1tsadityaraj)
+*Built with ❤️ by [Aditya Raj](https://github.com/1tsadityaraj)*
