@@ -25,13 +25,8 @@ export async function reviewPR(context, geminiClient) {
   const parsedFiles = parseDiff(rawDiff);
   const filesToReview = parsedFiles.slice(0, 10);
 
-  const model = geminiClient.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-    generationConfig: {
-      temperature: 0,
-      responseMimeType: "application/json",
-    },
-  });
+  // The passed `geminiClient` is already initialized with model and generationConfig
+  const model = geminiClient;
 
   let finalVerdict = "approved";
   const summaries = [];

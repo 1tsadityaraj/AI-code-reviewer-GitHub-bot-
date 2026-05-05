@@ -1,13 +1,21 @@
 /**
  * AI Code Reviewer GitHub Bot
- *
- * Entry point — registers Probot event handlers for pull_request
- * events and orchestrates the AI-powered review pipeline.
+ * Main Probot application entry point.
  */
 
 import "dotenv/config";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { reviewPR, postReview } from "./src/reviewer.js";
+
+// Initialize the Gemini client once at the top
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const geminiClient = genAI.getGenerativeModel({
+  model: "gemini-1.5-pro",
+  generationConfig: {
+    temperature: 0,
+    responseMimeType: "application/json",
+  },
+});
 
 /**
  * @param {import('probot').Probot} app
@@ -15,19 +23,24 @@ import { reviewPR, postReview } from "./src/reviewer.js";
 export default (app) => {
   app.log.info("🤖 AI Code Reviewer Bot loaded");
 
-  // Initialize the Gemini client once
-  const geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-  // ── Review on PR opened or updated ──────────────────────────
+  // ── 1. Pull Request Events ──────────────────────────────────────────
   app.on(
     ["pull_request.opened", "pull_request.synchronize"],
     async (context) => {
       const pr = context.payload.pull_request;
       const repo = context.repo();
 
-      app.log.info(
-        `📝 Reviewing PR #${pr.number} "${pr.title}" in ${repo.owner}/${repo.repo}`
-      );
+      // Guard: Skip massive PRs
+      if (pr.changed_files > 50) {
+        await context.octokit.issues.createComment({
+          ...repo,
+          issue_number: pr.number,
+          body: "⚠️ **AI Code Review Skipped:** This PR modifies more than 50 files. The diff is too large for an automated review.",
+        });
+        return;
+      }
+
+      app.log.info(`📝 Reviewing PR #${pr.number} in ${repo.owner}/${repo.repo}`);
 
       try {
         await context.octokit.repos.createCommitStatus({
@@ -38,20 +51,20 @@ export default (app) => {
           context: "AI Code Reviewer",
         });
 
-        // Review PR using the new pipeline
+        // Delegate review logic to reviewer.js
         const result = await reviewPR(context, geminiClient);
-        
-        // Post the final summary and inline comments
         await postReview(context, result);
 
-        // Update the commit status based on the verdict
+        // Calculate commit status
+        const hasCritical = result.issues.some((i) => i.severity === "critical");
+
         await context.octokit.repos.createCommitStatus({
           ...repo,
           sha: pr.head.sha,
-          state: result.verdict === "needs_work" ? "failure" : "success",
-          description: result.verdict === "needs_work"
-            ? `Needs work — ${result.issues.length} issue(s) found`
-            : "Approved — Code looks good",
+          state: hasCritical ? "failure" : "success",
+          description: hasCritical
+            ? "Critical issues found"
+            : "Review complete — no critical issues",
           context: "AI Code Reviewer",
         });
       } catch (error) {
@@ -70,21 +83,32 @@ export default (app) => {
     }
   );
 
-  // ── Re-review via "/review" comment command ─────────────────
+  // ── 2. Issue Comment Event (/review) ────────────────────────────────
   app.on("issue_comment.created", async (context) => {
     const { comment, issue } = context.payload;
+    const repo = context.repo();
 
-    if (!issue.pull_request || !comment.body.trim().startsWith("/review")) {
+    // Guard: Only respond to exactly "/review" on a Pull Request
+    if (!issue.pull_request || comment.body.trim() !== "/review") {
       return;
     }
 
-    const repo = context.repo();
-
     try {
+      // Fetch the full PR object to get the changed_files count
       const { data: pr } = await context.octokit.pulls.get({
         ...repo,
         pull_number: issue.number,
       });
+
+      // Guard: Skip massive PRs
+      if (pr.changed_files > 50) {
+        await context.octokit.issues.createComment({
+          ...repo,
+          issue_number: pr.number,
+          body: "⚠️ **AI Code Review Skipped:** This PR modifies more than 50 files. The diff is too large for an automated review.",
+        });
+        return;
+      }
 
       await context.octokit.reactions.createForIssueComment({
         ...repo,
@@ -92,10 +116,8 @@ export default (app) => {
         content: "eyes",
       });
 
-      // Re-review PR using the new pipeline
+      // Delegate review logic to reviewer.js
       const result = await reviewPR(context, geminiClient);
-      
-      // Post the final summary and inline comments
       await postReview(context, result);
 
       await context.octokit.reactions.createForIssueComment({
